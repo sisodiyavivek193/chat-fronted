@@ -1,8 +1,7 @@
 import axios from 'axios'
 
 const api = axios.create({
-    // Fallback hata do, direct URL daalo
-    baseURL: "https://chat-backend-production.up.railway.app",
+    baseURL: "https://chat-backend-production-87bd.up.railway.app",  // ← naya URL
     headers: { "Content-Type": "application/json" },
 });
 // Attach JWT token to every request
