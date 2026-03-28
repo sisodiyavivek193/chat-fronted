@@ -145,6 +145,7 @@ export const ChatProvider = ({ children }) => {
         if (!conv.lastMessage) return 'Say hello! 👋'
         if (conv.lastMessage.isDeleted) return '🚫 This message was deleted'
         if (!conv.lastMessage.encryptedContent) return 'Say hello! 👋'
+
         if (user && conv.otherUser) {
             try {
                 const decrypted = decrypt(
@@ -153,7 +154,11 @@ export const ChatProvider = ({ children }) => {
                     conv.otherUser._id
                 )
                 if (decrypted && decrypted !== '[Could not decrypt]' && decrypted !== '[Encrypted message]') {
-                    return decrypted
+                    // ✅ Sender prefix add karo
+                    const isMe = conv.lastMessage.sender?._id === user._id ||
+                        conv.lastMessage.sender === user._id
+                    const prefix = isMe ? 'You: ' : ''
+                    return prefix + decrypted
                 }
             } catch { }
         }
