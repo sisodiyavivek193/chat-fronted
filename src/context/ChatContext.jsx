@@ -1,9 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { useAuth } from '../../context/AuthContext'
-import { useChat } from '../../context/ChatContext'
-import { getSocket } from '../../utils/socket'
-import { encrypt, decrypt } from '../../utils/encryption'
-import api from '../../utils/api'
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react'
+import { getSocket } from '../utils/socket'
+import { useAuth } from './AuthContext'          // ← same folder
+import { decrypt } from '../utils/encryption'   // ← ek level upar
+import api from '../utils/api'
 import { format } from 'date-fns'
 import toast from 'react-hot-toast'
 
