@@ -45,7 +45,6 @@ export default function UserSearch({ onBack }) {
     }
 
     const startChat = async (u) => {
-        // Pehle existing conversation dhundo
         const existing = conversations.find(
             c => c.otherUser?._id === u._id
         )
@@ -54,16 +53,9 @@ export default function UserSearch({ onBack }) {
             onBack()
             return
         }
-        // Naya conversation banao
-        try {
-            const res = await api.post('/api/chat/conversation', {
-                toUserId: u._id
-            })
-            selectChat(u, res.data.conversation._id)
-            onBack()
-        } catch (err) {
-            toast.error('Could not open chat')
-        }
+        // Conversation nahi hai toh sirf select karo
+        selectChat(u, null)
+        onBack()
     }
 
     const getButtonState = (user) => {

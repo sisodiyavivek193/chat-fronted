@@ -5,7 +5,7 @@ let socket = null
 export const connectSocket = (token) => {
     if (socket?.connected) return socket
 
-    socket = io(import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000', {
+    socket = io(import.meta.env.VITE_SOCKET_URL || 'https://chat-backend-production-87bd.up.railway.app', {
         auth: { token },
         transports: ['websocket'],
     })
