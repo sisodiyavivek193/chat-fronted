@@ -59,7 +59,24 @@ export const ChatProvider = ({ children }) => {
                     [conversationId]: (prev[conversationId] || 0) + 1
                 }))
             }
-            loadConversations()
+
+            // ✅ Conversation ko top pe le jao — API call ki zaroorat nahi
+            setConversations((prev) => {
+                const updated = prev.map((conv) => {
+                    if (conv._id === conversationId) {
+                        return {
+                            ...conv,
+                            lastMessage: message,
+                            lastMessageAt: message.createdAt,
+                        }
+                    }
+                    return conv
+                })
+                // lastMessageAt ke basis pe sort karo
+                return [...updated].sort(
+                    (a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt)
+                )
+            })
         })
 
         socket.on('messageDeleted', ({ messageId }) => {
