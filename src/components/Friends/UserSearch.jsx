@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import api from '../../utils/api'
 import toast from 'react-hot-toast'
+import { useChat } from '../../context/ChatContext'
 
 export default function UserSearch({ onBack }) {
     const [query, setQuery] = useState('')
     const [results, setResults] = useState([])
     const [loading, setLoading] = useState(false)
-    const [requestStates, setRequestStates] = useState({}) // { userId: 'pending'|'sent'|'friends' }
+    const [requestStates, setRequestStates] = useState({})
+    const { selectChat, conversations } = useChat()
 
     const search = async (val) => {
         setQuery(val)
@@ -39,6 +41,28 @@ export default function UserSearch({ onBack }) {
             toast.success('Request cancelled')
         } catch (err) {
             toast.error(err.response?.data?.error || 'Failed')
+        }
+    }
+
+    const startChat = async (u) => {
+        // Pehle existing conversation dhundo
+        const existing = conversations.find(
+            c => c.otherUser?._id === u._id
+        )
+        if (existing) {
+            selectChat(u, existing._id)
+            onBack()
+            return
+        }
+        // Naya conversation banao
+        try {
+            const res = await api.post('/api/chat/conversation', {
+                toUserId: u._id
+            })
+            selectChat(u, res.data.conversation._id)
+            onBack()
+        } catch (err) {
+            toast.error('Could not open chat')
         }
     }
 
@@ -111,16 +135,22 @@ export default function UserSearch({ onBack }) {
                                 {u.bio && <p className="text-wa-text_secondary text-xs truncate mt-0.5">{u.bio}</p>}
                             </div>
 
-                            {/* Action button */}
-                            <div className="flex-shrink-0">
+                            {/* Action buttons */}
+                            <div className="flex-shrink-0 flex items-center gap-2">
+                                {/* Friends — Chat button */}
                                 {btnState === 'friends' && (
-                                    <span className="text-wa-green text-xs font-medium flex items-center gap-1">
-                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                    <button
+                                        onClick={() => startChat(u)}
+                                        className="text-xs bg-wa-green hover:bg-wa-green_dark text-white px-3 py-1.5 rounded-full transition-all font-medium flex items-center gap-1"
+                                    >
+                                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                                            <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z" />
                                         </svg>
-                                        Friends
-                                    </span>
+                                        Chat
+                                    </button>
                                 )}
+
+                                {/* Sent request */}
                                 {(btnState === 'sent' || btnState === 'pending_sent') && (
                                     <button
                                         onClick={() => cancelRequest(u._id, u.requestId)}
@@ -129,11 +159,15 @@ export default function UserSearch({ onBack }) {
                                         Sent ✓
                                     </button>
                                 )}
+
+                                {/* Incoming request */}
                                 {btnState === 'pending_received' && (
                                     <span className="text-xs text-wa-green border border-wa-green px-3 py-1.5 rounded-full">
                                         Incoming
                                     </span>
                                 )}
+
+                                {/* Add Friend */}
                                 {(btnState === 'none' || !btnState) && (
                                     <button
                                         onClick={() => sendRequest(u._id)}
@@ -142,6 +176,8 @@ export default function UserSearch({ onBack }) {
                                         Add Friend
                                     </button>
                                 )}
+
+                                {/* Sending spinner */}
                                 {btnState === 'sending' && (
                                     <div className="w-5 h-5 border-2 border-wa-green border-t-transparent rounded-full animate-spin" />
                                 )}
