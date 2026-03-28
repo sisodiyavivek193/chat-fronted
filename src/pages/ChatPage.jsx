@@ -11,7 +11,6 @@ export default function ChatPage() {
 
             {/* Right panel - chat window */}
             <div className="flex-1 flex flex-col min-w-0 min-h-0">
-
                 <ChatWindow />
             </div>
         </div>
