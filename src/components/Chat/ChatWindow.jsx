@@ -13,20 +13,37 @@ export default function ChatWindow() {
     const [input, setInput] = useState('')
     const [sending, setSending] = useState(false)
     const [showMenu, setShowMenu] = useState(false)
-    const [contextMenu, setContextMenu] = useState(null) // { x, y, messageId }
+    const [contextMenu, setContextMenu] = useState(null)
     const bottomRef = useRef(null)
+    const messagesAreaRef = useRef(null)
     const typingTimeout = useRef(null)
 
     const otherUser = selectedChat?.user
     const isTyping = typingUsers[otherUser?._id]
     const isOnline = onlineUsers.has(otherUser?._id)
 
-    // Scroll to bottom on new messages
+    // ✅ Fix 1: Chat switch hone pe messages clear + scroll reset
     useEffect(() => {
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-    }, [messages, isTyping])
+        if (messagesAreaRef.current) {
+            messagesAreaRef.current.scrollTop = 0
+        }
+    }, [selectedChat?.user?._id])
 
-    // Typing events
+    // ✅ Fix 2: Naye messages aane pe bottom scroll
+    useEffect(() => {
+        if (messages.length > 0) {
+            bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+        }
+    }, [messages.length, isTyping])
+
+    // ✅ Fix 3: decryptMessage — otherUser change hone pe fresh decrypt
+    const decryptMessage = useCallback((msg) => {
+        if (msg._plainText) return msg._plainText
+        if (msg.isDeleted) return null
+        if (!otherUser?._id) return '[Encrypted message]'
+        return decrypt(msg.encryptedContent, user._id, otherUser._id)
+    }, [user._id, otherUser?._id])
+
     const handleInputChange = (e) => {
         setInput(e.target.value)
         const socket = getSocket()
@@ -64,8 +81,9 @@ export default function ChatWindow() {
                 toUserId: otherUser._id,
                 encryptedContent: encrypted,
             })
-            // Replace temp with real
-            setMessages((prev) => prev.map((m) => m._id === tempMsg._id ? { ...res.data.message, _plainText: text } : m))
+            setMessages((prev) =>
+                prev.map((m) => m._id === tempMsg._id ? { ...res.data.message, _plainText: text } : m)
+            )
         } catch (err) {
             setMessages((prev) => prev.filter((m) => m._id !== tempMsg._id))
             toast.error(err.response?.data?.error || 'Failed to send')
@@ -85,7 +103,11 @@ export default function ChatWindow() {
         try {
             await api.delete(`/api/chat/message/${messageId}`)
             setMessages((prev) =>
-                prev.map((m) => m._id === messageId ? { ...m, isDeleted: true, encryptedContent: 'This message was deleted' } : m)
+                prev.map((m) =>
+                    m._id === messageId
+                        ? { ...m, isDeleted: true, encryptedContent: 'This message was deleted' }
+                        : m
+                )
             )
             setContextMenu(null)
         } catch (err) {
@@ -103,20 +125,14 @@ export default function ChatWindow() {
         }
     }
 
-    const decryptMessage = useCallback((msg) => {
-        if (msg._plainText) return msg._plainText
-        if (msg.isDeleted) return null
-        return decrypt(msg.encryptedContent, user._id, otherUser._id)
-    }, [user._id, otherUser?._id])
-
     if (!selectedChat) {
         return (
             <div className="flex-1 flex flex-col items-center justify-center bg-wa-chat">
-                {/* WhatsApp-like welcome screen */}
                 <div className="flex flex-col items-center gap-4 opacity-60">
                     <div className="w-24 h-24 rounded-full bg-wa-panel flex items-center justify-center">
                         <svg viewBox="0 0 24 24" className="w-14 h-14 fill-wa-text_secondary">
-                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" /><path d="M12 0C5.373 0 0 5.373 0 12c0 2.126.556 4.121 1.528 5.849L.057 23.704a.75.75 0 0 0 .92.92l5.855-1.471A11.945 11.945 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.806 9.806 0 0 1-5.044-1.394l-.361-.214-3.737.938.953-3.642-.235-.374A9.818 9.818 0 0 1 2.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z" />
+                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z" />
+                            <path d="M12 0C5.373 0 0 5.373 0 12c0 2.126.556 4.121 1.528 5.849L.057 23.704a.75.75 0 0 0 .92.92l5.855-1.471A11.945 11.945 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.806 9.806 0 0 1-5.044-1.394l-.361-.214-3.737.938.953-3.642-.235-.374A9.818 9.818 0 0 1 2.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z" />
                         </svg>
                     </div>
                     <div className="text-center">
@@ -124,7 +140,9 @@ export default function ChatWindow() {
                         <p className="text-wa-text_secondary text-sm mt-1">Send and receive messages</p>
                     </div>
                     <div className="flex items-center gap-2 mt-4 text-wa-text_secondary text-xs">
-                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z" /></svg>
+                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z" />
+                        </svg>
                         End-to-end encrypted
                     </div>
                 </div>
@@ -162,7 +180,6 @@ export default function ChatWindow() {
                     </div>
                 </div>
 
-                {/* Header actions */}
                 <div className="flex items-center gap-1">
                     <div className="relative">
                         <button
@@ -170,12 +187,20 @@ export default function ChatWindow() {
                             className="p-2 rounded-full hover:bg-wa-hover text-wa-icon"
                         >
                             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                                <circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" />
+                                <circle cx="12" cy="5" r="1.5" />
+                                <circle cx="12" cy="12" r="1.5" />
+                                <circle cx="12" cy="19" r="1.5" />
                             </svg>
                         </button>
                         {showMenu && (
-                            <div className="absolute right-0 top-10 bg-wa-panel border border-wa-border rounded-md shadow-xl z-50 w-44 py-1" onClick={(e) => e.stopPropagation()}>
-                                <button onClick={handleBlock} className="w-full text-left px-4 py-2 text-red-400 text-sm hover:bg-wa-hover">
+                            <div
+                                className="absolute right-0 top-10 bg-wa-panel border border-wa-border rounded-md shadow-xl z-50 w-44 py-1"
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                <button
+                                    onClick={handleBlock}
+                                    className="w-full text-left px-4 py-2 text-red-400 text-sm hover:bg-wa-hover"
+                                >
                                     Block {otherUser?.username}
                                 </button>
                             </div>
@@ -184,9 +209,13 @@ export default function ChatWindow() {
                 </div>
             </div>
 
-            {/* Messages area */}
-            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-1"
-                style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Ccircle cx='30' cy='30' r='1' fill='%23ffffff05'/%3E%3C/svg%3E\")" }}
+            {/* ✅ Messages area with ref for scroll control */}
+            <div
+                ref={messagesAreaRef}
+                className="flex-1 overflow-y-auto px-4 py-3 space-y-1"
+                style={{
+                    backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Ccircle cx='30' cy='30' r='1' fill='%23ffffff05'/%3E%3C/svg%3E\")"
+                }}
             >
                 {messages.length === 0 && (
                     <div className="flex justify-center py-8">
@@ -221,12 +250,12 @@ export default function ChatWindow() {
                                         }
                                     }}
                                     className={`relative max-w-[65%] px-3 py-2 rounded-lg text-sm shadow-sm cursor-pointer
-                    ${isMine
+                                        ${isMine
                                             ? 'bg-wa-bubble_out text-wa-text rounded-tr-none bubble-out'
                                             : 'bg-wa-bubble_in text-wa-text rounded-tl-none bubble-in'
                                         }
-                    ${msg.isDeleted ? 'opacity-60 italic' : ''}
-                  `}
+                                        ${msg.isDeleted ? 'opacity-60 italic' : ''}
+                                    `}
                                 >
                                     {msg.isDeleted ? (
                                         <span className="flex items-center gap-1 text-wa-text_secondary">
@@ -266,10 +295,11 @@ export default function ChatWindow() {
                     </div>
                 )}
 
+                {/* ✅ Bottom anchor for scroll */}
                 <div ref={bottomRef} />
             </div>
 
-            {/* Context menu (right-click delete) */}
+            {/* Context menu */}
             {contextMenu && (
                 <div
                     className="fixed bg-wa-panel border border-wa-border rounded-md shadow-xl z-50 py-1 w-36"

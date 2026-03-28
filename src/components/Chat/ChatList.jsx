@@ -4,12 +4,11 @@ import { useChat } from '../../context/ChatContext'
 import { formatDistanceToNow } from 'date-fns'
 import UserSearch from '../Friends/UserSearch'
 import FriendRequests from '../Friends/FriendRequests'
-// import FriendRequests from '../Friends/FriendRequests'
 
 export default function ChatList() {
     const { user, logout } = useAuth()
-    const { conversations, selectedChat, selectChat, notifications, onlineUsers, unreadCounts } = useChat()
-    const [tab, setTab] = useState('chats') // 'chats' | 'search' | 'requests'
+    const { conversations, selectedChat, selectChat, notifications, onlineUsers, unreadCounts, getLastMessagePreview } = useChat()
+    const [tab, setTab] = useState('chats')
     const [showMenu, setShowMenu] = useState(false)
 
     const totalNotifs = notifications.length
@@ -19,7 +18,6 @@ export default function ChatList() {
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 bg-wa-panel">
                 <div className="flex items-center gap-3">
-                    {/* Avatar */}
                     <div className="w-10 h-10 rounded-full bg-wa-green flex items-center justify-center text-white font-bold text-sm cursor-pointer">
                         {user?.fullName?.charAt(0).toUpperCase()}
                     </div>
@@ -43,7 +41,7 @@ export default function ChatList() {
                         )}
                     </button>
 
-                    {/* Search / Add friend */}
+                    {/* Search */}
                     <button
                         onClick={() => setTab(tab === 'search' ? 'chats' : 'search')}
                         className="p-2 rounded-full hover:bg-wa-hover text-wa-icon transition-colors"
@@ -61,7 +59,9 @@ export default function ChatList() {
                             className="p-2 rounded-full hover:bg-wa-hover text-wa-icon transition-colors"
                         >
                             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                                <circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" />
+                                <circle cx="12" cy="5" r="1.5" />
+                                <circle cx="12" cy="12" r="1.5" />
+                                <circle cx="12" cy="19" r="1.5" />
                             </svg>
                         </button>
                         {showMenu && (
@@ -81,7 +81,7 @@ export default function ChatList() {
             {/* Tabs */}
             {tab === 'chats' && (
                 <>
-                    {/* Search bar (within chats) */}
+                    {/* Search bar */}
                     <div className="px-3 py-2 bg-wa-sidebar">
                         <div className="flex items-center bg-wa-search rounded-lg px-3 gap-2">
                             <svg className="w-4 h-4 text-wa-text_secondary flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -108,33 +108,32 @@ export default function ChatList() {
                                 <p className="text-xs mt-1">Search users to start chatting</p>
                             </div>
                         ) : (
-                            conversations.map((conv) => (
-                                <ConversationItem
-                                    key={conv._id}
-                                    conv={conv}
-                                    isSelected={selectedChat?.user?._id === conv.otherUser?._id}
-                                    isOnline={onlineUsers.has(conv.otherUser?._id)}
-                                    unread={unreadCounts[conv._id] || 0}
-                                    onClick={() => selectChat(conv.otherUser, conv._id)}
-                                />
-                            ))
+                            // Latest message wali conversation top pe
+                            [...conversations]
+                                .sort((a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt))
+                                .map((conv) => (
+                                    <ConversationItem
+                                        key={conv._id}
+                                        conv={conv}
+                                        isSelected={selectedChat?.user?._id === conv.otherUser?._id}
+                                        isOnline={onlineUsers.has(conv.otherUser?._id)}
+                                        unread={unreadCounts[conv._id] || 0}
+                                        preview={getLastMessagePreview(conv)}
+                                        onClick={() => selectChat(conv.otherUser, conv._id)}
+                                    />
+                                ))
                         )}
                     </div>
                 </>
             )}
 
-            {tab === 'search' && (
-                <UserSearch onBack={() => setTab('chats')} />
-            )}
-
-            {tab === 'requests' && (
-                <FriendRequests onBack={() => setTab('chats')} />
-            )}
+            {tab === 'search' && <UserSearch onBack={() => setTab('chats')} />}
+            {tab === 'requests' && <FriendRequests onBack={() => setTab('chats')} />}
         </div>
     )
 }
 
-function ConversationItem({ conv, isSelected, isOnline, unread, onClick }) {
+function ConversationItem({ conv, isSelected, isOnline, unread, preview, onClick }) {
     const lastMsgTime = conv.lastMessageAt
         ? formatDistanceToNow(new Date(conv.lastMessageAt), { addSuffix: false })
         : ''
@@ -142,8 +141,7 @@ function ConversationItem({ conv, isSelected, isOnline, unread, onClick }) {
     return (
         <div
             onClick={onClick}
-            className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors border-b border-wa-border/30 ${isSelected ? 'bg-wa-hover' : 'hover:bg-wa-hover/50'
-                }`}
+            className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors border-b border-wa-border/30 ${isSelected ? 'bg-wa-hover' : 'hover:bg-wa-hover/50'}`}
         >
             {/* Avatar */}
             <div className="relative flex-shrink-0">
@@ -162,13 +160,8 @@ function ConversationItem({ conv, isSelected, isOnline, unread, onClick }) {
                     <span className="text-wa-text_secondary text-[11px] ml-2 flex-shrink-0">{lastMsgTime}</span>
                 </div>
                 <div className="flex justify-between items-center mt-0.5">
-                    <p className="text-wa-text_secondary text-xs truncate">
-                        {conv.lastMessage?.isDeleted
-                            ? '🚫 This message was deleted'
-                            : conv.lastMessage?.encryptedContent
-                                ? '🔒 Encrypted message'
-                                : 'Say hello!'}
-                    </p>
+                    {/* ✅ Actual last message dikhega */}
+                    <p className="text-wa-text_secondary text-xs truncate">{preview}</p>
                     {unread > 0 && (
                         <span className="bg-wa-green text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 ml-1 flex-shrink-0">
                             {unread}
