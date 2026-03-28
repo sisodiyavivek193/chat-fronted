@@ -273,7 +273,10 @@ export default function ChatWindow() {
             {contextMenu && (
                 <div
                     className="fixed bg-wa-panel border border-wa-border rounded-md shadow-xl z-50 py-1 w-36"
-                    style={{ left: contextMenu.x, top: contextMenu.y }}
+                    style={{
+                        left: Math.max(10, Math.min(contextMenu.x - 120, window.innerWidth - 150)),
+                        top: contextMenu.y
+                    }}
                     onClick={(e) => e.stopPropagation()}
                 >
                     <button
