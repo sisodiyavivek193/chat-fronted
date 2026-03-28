@@ -3,7 +3,7 @@ import ChatWindow from '../components/Chat/ChatWindow'
 
 export default function ChatPage() {
     return (
-        <div className="flex  w-screen overflow-hidden bg-wa-bg">
+        <div className="flex h-screen  w-screen overflow-hidden bg-wa-bg">
             {/* Left sidebar - chat list */}
             <div className="w-[380px] min-w-[320px] flex-shrink-0 flex flex-col border-r border-wa-border">
                 <ChatList />
