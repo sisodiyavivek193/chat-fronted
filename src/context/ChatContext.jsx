@@ -51,6 +51,9 @@ export const ChatProvider = ({ children }) => {
         if (!socket) return
 
         socket.on('newMessage', ({ message, conversationId }) => {
+            // console.log('🔔 newMessage received:', conversationId)
+            // console.log('📋 Current conversations:', conversations.map(c => c._id))
+
             const current = selectedChatRef.current
             if (current?.conversationId === conversationId) {
                 setMessages((prev) => {
@@ -63,24 +66,7 @@ export const ChatProvider = ({ children }) => {
                     [conversationId]: (prev[conversationId] || 0) + 1
                 }))
             }
-
-            // ✅ Conversation ko top pe le jao — API call ki zaroorat nahi
-            setConversations((prev) => {
-                const updated = prev.map((conv) => {
-                    if (conv._id === conversationId) {
-                        return {
-                            ...conv,
-                            lastMessage: message,
-                            lastMessageAt: message.createdAt,
-                        }
-                    }
-                    return conv
-                })
-                // lastMessageAt ke basis pe sort karo
-                return [...updated].sort(
-                    (a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt)
-                )
-            })
+            loadConversations()
         })
 
         socket.on('messageDeleted', ({ messageId }) => {
