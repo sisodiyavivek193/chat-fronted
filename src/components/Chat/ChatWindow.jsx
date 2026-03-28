@@ -212,7 +212,7 @@ export default function ChatWindow() {
             {/* ✅ Messages area with ref for scroll control */}
             <div
                 ref={messagesAreaRef}
-                className="flex-1 overflow-y-auto px-4 py-3 space-y-1"
+                className="flex-1 overflow-y-auto px-4 py-3 space-y-1 min-h-0"
                 style={{
                     backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60'%3E%3Ccircle cx='30' cy='30' r='1' fill='%23ffffff05'/%3E%3C/svg%3E\")"
                 }}
