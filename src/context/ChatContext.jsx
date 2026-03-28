@@ -51,8 +51,8 @@ export const ChatProvider = ({ children }) => {
         if (!socket) return
 
         socket.on('newMessage', ({ message, conversationId }) => {
-            // console.log('🔔 newMessage received:', conversationId)
-            // console.log('📋 Current conversations:', conversations.map(c => c._id))
+            console.log('🔔 newMessage received:', conversationId)
+            console.log('📋 Current conversations:', conversations.map(c => c._id))
 
             const current = selectedChatRef.current
             if (current?.conversationId === conversationId) {
