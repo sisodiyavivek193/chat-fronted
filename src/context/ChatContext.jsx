@@ -24,7 +24,11 @@ export const ChatProvider = ({ children }) => {
     const loadConversations = useCallback(async () => {
         try {
             const res = await api.get('/api/chat/conversations')
-            setConversations(res.data.conversations)
+            // ✅ Sort karo latest message pehle
+            const sorted = [...res.data.conversations].sort(
+                (a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt)
+            )
+            setConversations(sorted)
         } catch { }
     }, [])
 
