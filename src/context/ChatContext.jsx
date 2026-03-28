@@ -24,7 +24,6 @@ export const ChatProvider = ({ children }) => {
     const loadConversations = useCallback(async () => {
         try {
             const res = await api.get('/api/chat/conversations')
-            // ✅ Sort karo latest message pehle
             const sorted = [...res.data.conversations].sort(
                 (a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt)
             )
@@ -50,24 +49,55 @@ export const ChatProvider = ({ children }) => {
         const socket = getSocket()
         if (!socket) return
 
-        socket.on('newMessage', ({ message, conversationId }) => {
+        const handleNewMessage = ({ message, conversationId }) => {
             console.log('🔔 newMessage received:', conversationId)
-            console.log('📋 Current conversations:', conversations.map(c => c._id))
 
             const current = selectedChatRef.current
-            if (current?.conversationId === conversationId) {
+            const convIdStr = conversationId?.toString()
+
+            // ─── 1. Messages array update (agar ye chat open hai) ───
+            if (current?.conversationId?.toString() === convIdStr) {
                 setMessages((prev) => {
-                    if (prev.find(m => m._id === message._id)) return prev
-                    return [...prev, message]
+                    // Pehle se hai toh skip
+                    if (prev.find((m) => m._id === message._id)) return prev
+                    // Temp messages hata ke real add karo
+                    const withoutTemp = prev.filter((m) => !m._id?.startsWith('temp_'))
+                    return [...withoutTemp, message]
                 })
             } else {
+                // ─── Unread count badhao ───
                 setUnreadCounts((prev) => ({
                     ...prev,
-                    [conversationId]: (prev[conversationId] || 0) + 1
+                    [convIdStr]: (prev[convIdStr] || 0) + 1,
                 }))
             }
-            loadConversations()
-        })
+
+            // ─── 2. Conversation list OPTIMISTICALLY update karo ───
+            setConversations((prev) => {
+                const existingIndex = prev.findIndex((c) => c._id?.toString() === convIdStr)
+
+                if (existingIndex === -1) {
+                    // Naya conversation — API se fresh load karo
+                    loadConversations()
+                    return prev
+                }
+
+                const updated = [...prev]
+                const conv = { ...updated[existingIndex] }
+
+                // lastMessage aur lastMessageAt update karo
+                conv.lastMessage = message
+                conv.lastMessageAt = message.createdAt || new Date().toISOString()
+
+                // Top pe le aao
+                updated.splice(existingIndex, 1)
+                updated.unshift(conv)
+
+                return updated
+            })
+        }
+
+        socket.on('newMessage', handleNewMessage)
 
         socket.on('messageDeleted', ({ messageId }) => {
             setMessages((prev) =>
@@ -77,6 +107,8 @@ export const ChatProvider = ({ children }) => {
                         : m
                 )
             )
+            // Preview bhi update karo
+            loadConversations()
         })
 
         socket.on('friendRequestReceived', (data) => {
@@ -106,7 +138,7 @@ export const ChatProvider = ({ children }) => {
         })
 
         return () => {
-            socket.off('newMessage')
+            socket.off('newMessage', handleNewMessage)
             socket.off('messageDeleted')
             socket.off('friendRequestReceived')
             socket.off('friendRequestAccepted')
@@ -115,7 +147,7 @@ export const ChatProvider = ({ children }) => {
             socket.off('userOnline')
             socket.off('userOffline')
         }
-    }, [user])
+    }, [user, loadConversations])
 
     const selectChat = async (chatUser, conversationId) => {
         setMessages([])
@@ -144,10 +176,13 @@ export const ChatProvider = ({ children }) => {
                     conv.otherUser._id
                 )
                 if (decrypted && decrypted !== '[Could not decrypt]' && decrypted !== '[Encrypted message]') {
-                    // ✅ Sender prefix add karo
-                    const isMe = conv.lastMessage.sender?._id === user._id ||
+                    const isMe =
+                        conv.lastMessage.sender?._id === user._id ||
                         conv.lastMessage.sender === user._id
-                    const prefix = isMe ? 'You: ' : ''
+                    // Sender ka pehla naam dikhao (receiver ke side pe)
+                    const prefix = isMe
+                        ? 'You: '
+                        : `${conv.otherUser?.fullName?.split(' ')[0]}: `
                     return prefix + decrypted
                 }
             } catch { }

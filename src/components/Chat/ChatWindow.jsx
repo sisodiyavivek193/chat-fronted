@@ -9,7 +9,7 @@ import toast from 'react-hot-toast'
 
 export default function ChatWindow() {
     const { user } = useAuth()
-    const { selectedChat, messages, setMessages, typingUsers, onlineUsers } = useChat()
+    const { selectedChat, messages, setMessages, typingUsers, onlineUsers, setConversations } = useChat()
     const [input, setInput] = useState('')
     const [sending, setSending] = useState(false)
     const [showMenu, setShowMenu] = useState(false)
@@ -81,9 +81,30 @@ export default function ChatWindow() {
                 toUserId: otherUser._id,
                 encryptedContent: encrypted,
             })
+            const realMsg = res.data.message
+
+            // ─── Messages array mein temp ko real se replace karo ───
             setMessages((prev) =>
-                prev.map((m) => m._id === tempMsg._id ? { ...res.data.message, _plainText: text } : m)
+                prev.map((m) => m._id === tempMsg._id ? { ...realMsg, _plainText: text } : m)
             )
+
+            // ─── Conversation list optimistically update karo (sender side) ───
+            setConversations((prev) => {
+                const convId = selectedChat?.conversationId?.toString()
+                if (!convId) return prev
+                const existingIndex = prev.findIndex((c) => c._id?.toString() === convId)
+                if (existingIndex === -1) return prev
+
+                const updated = [...prev]
+                const conv = { ...updated[existingIndex] }
+                conv.lastMessage = realMsg
+                conv.lastMessageAt = realMsg.createdAt || new Date().toISOString()
+
+                // Top pe le aao
+                updated.splice(existingIndex, 1)
+                updated.unshift(conv)
+                return updated
+            })
         } catch (err) {
             setMessages((prev) => prev.filter((m) => m._id !== tempMsg._id))
             toast.error(err.response?.data?.error || 'Failed to send')
