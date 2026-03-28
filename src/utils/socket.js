@@ -3,8 +3,13 @@ import { io } from 'socket.io-client'
 let socket = null
 
 export const connectSocket = (token) => {
-    // 🛑 Agar already socket exist hai → reuse karo
-    if (socket) return socket
+    if (socket?.connected) return socket
+
+    // Agar purana disconnected socket hai toh hata do
+    if (socket) {
+        socket.disconnect()
+        socket = null
+    }
 
     if (!token) {
         console.warn("❌ No token, socket not connected")
@@ -16,7 +21,8 @@ export const connectSocket = (token) => {
         'https://chat-backend-production-87bd.up.railway.app',
         {
             auth: { token },
-            transports: ['websocket'],
+            // ✅ polling se start karo, phir websocket upgrade hoga
+            transports: ['polling', 'websocket'],
         }
     )
 
@@ -26,6 +32,10 @@ export const connectSocket = (token) => {
 
     socket.on('disconnect', (reason) => {
         console.log('❌ Socket disconnected:', reason)
+        // Auto reconnect
+        if (reason === 'io server disconnect') {
+            socket.connect()
+        }
     })
 
     socket.on('connect_error', (err) => {
