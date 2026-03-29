@@ -17,16 +17,10 @@ export const ChatProvider = ({ children }) => {
     const [unreadCounts, setUnreadCounts] = useState({})
 
     const selectedChatRef = useRef(null)
-    // ✅ conversations ka live ref — stale closure problem fix
     const conversationsRef = useRef([])
 
-    useEffect(() => {
-        selectedChatRef.current = selectedChat
-    }, [selectedChat])
-
-    useEffect(() => {
-        conversationsRef.current = conversations
-    }, [conversations])
+    useEffect(() => { selectedChatRef.current = selectedChat }, [selectedChat])
+    useEffect(() => { conversationsRef.current = conversations }, [conversations])
 
     const loadConversations = useCallback(async () => {
         try {
@@ -53,6 +47,15 @@ export const ChatProvider = ({ children }) => {
         loadNotifications()
     }, [user])
 
+    // ✅ POLLING — har 3 second mein conversations refresh (socket backup)
+    useEffect(() => {
+        if (!user) return
+        const interval = setInterval(() => {
+            loadConversations()
+        }, 3000)
+        return () => clearInterval(interval)
+    }, [user, loadConversations])
+
     useEffect(() => {
         if (!user || !token) return
 
@@ -66,7 +69,6 @@ export const ChatProvider = ({ children }) => {
             const convIdStr = conversationId?.toString()
             const isCurrentChat = current?.conversationId?.toString() === convIdStr
 
-            // ─── 1. Messages update ───
             if (isCurrentChat) {
                 setMessages((prev) => {
                     if (prev.find((m) => m._id === message._id)) return prev
@@ -80,30 +82,8 @@ export const ChatProvider = ({ children }) => {
                 }))
             }
 
-            // ─── 2. Conversation TOP PE LAO ───
-            // conversationsRef se latest data lo — stale closure problem nahi hogi
-            let currentConvs = conversationsRef.current
-            let existingIndex = currentConvs.findIndex((c) => c._id?.toString() === convIdStr)
-
-            if (existingIndex === -1) {
-                // Conversations abhi load nahi huin — API se fresh lo
-                console.log('⚠️ Conversation not found locally, fetching from API...')
-                currentConvs = await loadConversations()
-                existingIndex = currentConvs.findIndex((c) => c._id?.toString() === convIdStr)
-                // loadConversations ne already sorted set kar diya — bas return
-                if (existingIndex === -1) return
-                // Agar mil gayi toh ab neeche wala code chalega
-            }
-
-            // Optimistically top pe lao
-            const updated = [...currentConvs]
-            const conv = { ...updated[existingIndex] }
-            conv.lastMessage = message
-            conv.lastMessageAt = message.createdAt || new Date().toISOString()
-            updated.splice(existingIndex, 1)
-            updated.unshift(conv)
-            setConversations(updated)
-            conversationsRef.current = updated
+            // Immediate reload
+            loadConversations()
         }
 
         socket.off('newMessage')
@@ -133,9 +113,7 @@ export const ChatProvider = ({ children }) => {
             setNotifications((prev) => [data, ...prev])
         })
 
-        socket.on('friendRequestAccepted', () => {
-            loadConversations()
-        })
+        socket.on('friendRequestAccepted', () => { loadConversations() })
 
         socket.on('userTyping', ({ fromUserId }) => {
             setTypingUsers((prev) => ({ ...prev, [fromUserId]: true }))
@@ -147,15 +125,10 @@ export const ChatProvider = ({ children }) => {
             setOnlineUsers((prev) => new Set([...prev, userId]))
         })
         socket.on('userOffline', ({ userId }) => {
-            setOnlineUsers((prev) => {
-                const s = new Set(prev)
-                s.delete(userId)
-                return s
-            })
+            setOnlineUsers((prev) => { const s = new Set(prev); s.delete(userId); return s })
         })
-
         socket.on('connect', () => {
-            console.log('🔌 Socket reconnected — reloading conversations')
+            console.log('🔌 Socket reconnected')
             loadConversations()
         })
 
@@ -181,27 +154,18 @@ export const ChatProvider = ({ children }) => {
         try {
             const res = await api.get(`/api/chat/messages/${chatUser._id}`)
             setMessages(res.data.messages)
-        } catch {
-            setMessages([])
-        }
+        } catch { setMessages([]) }
     }
 
     const getLastMessagePreview = useCallback((conv) => {
         if (!conv.lastMessage) return 'Say hello! 👋'
         if (conv.lastMessage.isDeleted) return '🚫 This message was deleted'
         if (!conv.lastMessage.encryptedContent) return 'Say hello! 👋'
-
         if (user && conv.otherUser) {
             try {
-                const decrypted = decrypt(
-                    conv.lastMessage.encryptedContent,
-                    user._id,
-                    conv.otherUser._id
-                )
+                const decrypted = decrypt(conv.lastMessage.encryptedContent, user._id, conv.otherUser._id)
                 if (decrypted && decrypted !== '[Could not decrypt]' && decrypted !== '[Encrypted message]') {
-                    const isMe =
-                        conv.lastMessage.sender?._id === user._id ||
-                        conv.lastMessage.sender === user._id
+                    const isMe = conv.lastMessage.sender?._id === user._id || conv.lastMessage.sender === user._id
                     const prefix = isMe ? 'You: ' : `${conv.otherUser?.fullName?.split(' ')[0]}: `
                     return prefix + decrypted
                 }
