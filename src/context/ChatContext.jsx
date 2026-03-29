@@ -59,9 +59,7 @@ export const ChatProvider = ({ children }) => {
             // ─── 1. Messages array update (agar ye chat open hai) ───
             if (isCurrentChat) {
                 setMessages((prev) => {
-                    // Pehle se hai toh skip
                     if (prev.find((m) => m._id === message._id)) return prev
-                    // Temp messages hata ke real add karo
                     const withoutTemp = prev.filter((m) => !m._id?.startsWith('temp_'))
                     return [...withoutTemp, message]
                 })
@@ -73,12 +71,12 @@ export const ChatProvider = ({ children }) => {
                 }))
             }
 
-            // ─── 2. Conversation list ALWAYS update karo (sender + receiver dono ke liye) ───
+            // ─── 2. Conversation list update — SENDER + RECEIVER dono ke liye ───
             setConversations((prev) => {
                 const existingIndex = prev.findIndex((c) => c._id?.toString() === convIdStr)
 
                 if (existingIndex === -1) {
-                    // Naya conversation — API se fresh load karo
+                    // Fresh load karo — ye async hai, baad mein UI update hoga
                     loadConversations()
                     return prev
                 }
@@ -86,11 +84,11 @@ export const ChatProvider = ({ children }) => {
                 const updated = [...prev]
                 const conv = { ...updated[existingIndex] }
 
-                // lastMessage aur lastMessageAt update karo
+                // lastMessage aur timestamp update karo
                 conv.lastMessage = message
                 conv.lastMessageAt = message.createdAt || new Date().toISOString()
 
-                // Top pe le aao
+                // ✅ TOP PE LAO — hamesha, sender aur receiver dono ke liye
                 updated.splice(existingIndex, 1)
                 updated.unshift(conv)
 
@@ -108,7 +106,6 @@ export const ChatProvider = ({ children }) => {
                         : m
                 )
             )
-            // Preview bhi update karo
             loadConversations()
         })
 
@@ -180,7 +177,6 @@ export const ChatProvider = ({ children }) => {
                     const isMe =
                         conv.lastMessage.sender?._id === user._id ||
                         conv.lastMessage.sender === user._id
-                    // Sender ka pehla naam dikhao (receiver ke side pe)
                     const prefix = isMe
                         ? 'You: '
                         : `${conv.otherUser?.fullName?.split(' ')[0]}: `

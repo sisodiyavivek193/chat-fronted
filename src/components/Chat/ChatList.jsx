@@ -108,20 +108,17 @@ export default function ChatList() {
                                 <p className="text-xs mt-1">Search users to start chatting</p>
                             </div>
                         ) : (
-                            // Latest message wali conversation top pe
-                            [...conversations]
-                                .sort((a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt))
-                                .map((conv) => (
-                                    <ConversationItem
-                                        key={conv._id}
-                                        conv={conv}
-                                        isSelected={selectedChat?.user?._id === conv.otherUser?._id}
-                                        isOnline={onlineUsers.has(conv.otherUser?._id)}
-                                        unread={unreadCounts[conv._id] || 0}
-                                        preview={getLastMessagePreview(conv)}
-                                        onClick={() => selectChat(conv.otherUser, conv._id)}
-                                    />
-                                ))
+                            conversations.map((conv) => (
+                                <ConversationItem
+                                    key={conv._id}
+                                    conv={conv}
+                                    isSelected={selectedChat?.user?._id === conv.otherUser?._id}
+                                    isOnline={onlineUsers.has(conv.otherUser?._id)}
+                                    unread={unreadCounts[conv._id] || 0}
+                                    preview={getLastMessagePreview(conv)}
+                                    onClick={() => selectChat(conv.otherUser, conv._id)}
+                                />
+                            ))
                         )}
                     </div>
                 </>
