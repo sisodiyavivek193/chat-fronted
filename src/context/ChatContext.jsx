@@ -47,12 +47,10 @@ export const ChatProvider = ({ children }) => {
         loadNotifications()
     }, [user])
 
-    // ✅ POLLING — har 3 second mein conversations refresh (socket backup)
+    // ✅ Polling — har 3 second mein chatlist refresh
     useEffect(() => {
         if (!user) return
-        const interval = setInterval(() => {
-            loadConversations()
-        }, 3000)
+        const interval = setInterval(() => { loadConversations() }, 3000)
         return () => clearInterval(interval)
     }, [user, loadConversations])
 
@@ -62,13 +60,14 @@ export const ChatProvider = ({ children }) => {
         const socket = connectSocket(token)
         if (!socket) return
 
-        const handleNewMessage = async ({ message, conversationId }) => {
+        const handleNewMessage = ({ message, conversationId }) => {
             console.log('🔔 newMessage received:', conversationId)
 
             const current = selectedChatRef.current
             const convIdStr = conversationId?.toString()
             const isCurrentChat = current?.conversationId?.toString() === convIdStr
 
+            // ✅ Messages window update — receiver ke liye
             if (isCurrentChat) {
                 setMessages((prev) => {
                     if (prev.find((m) => m._id === message._id)) return prev
@@ -76,13 +75,14 @@ export const ChatProvider = ({ children }) => {
                     return [...withoutTemp, message]
                 })
             } else {
+                // ✅ Unread count — sirf tab jab chat open nahi
                 setUnreadCounts((prev) => ({
                     ...prev,
                     [convIdStr]: (prev[convIdStr] || 0) + 1,
                 }))
             }
 
-            // Immediate reload
+            // ✅ Chatlist bhi immediately update karo
             loadConversations()
         }
 
@@ -112,9 +112,7 @@ export const ChatProvider = ({ children }) => {
         socket.on('friendRequestReceived', (data) => {
             setNotifications((prev) => [data, ...prev])
         })
-
         socket.on('friendRequestAccepted', () => { loadConversations() })
-
         socket.on('userTyping', ({ fromUserId }) => {
             setTypingUsers((prev) => ({ ...prev, [fromUserId]: true }))
         })
