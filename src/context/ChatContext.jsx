@@ -54,9 +54,10 @@ export const ChatProvider = ({ children }) => {
 
             const current = selectedChatRef.current
             const convIdStr = conversationId?.toString()
+            const isCurrentChat = current?.conversationId?.toString() === convIdStr
 
             // ─── 1. Messages array update (agar ye chat open hai) ───
-            if (current?.conversationId?.toString() === convIdStr) {
+            if (isCurrentChat) {
                 setMessages((prev) => {
                     // Pehle se hai toh skip
                     if (prev.find((m) => m._id === message._id)) return prev
@@ -65,14 +66,14 @@ export const ChatProvider = ({ children }) => {
                     return [...withoutTemp, message]
                 })
             } else {
-                // ─── Unread count badhao ───
+                // ─── Unread count badhao (sirf tab jab ye chat open nahi) ───
                 setUnreadCounts((prev) => ({
                     ...prev,
                     [convIdStr]: (prev[convIdStr] || 0) + 1,
                 }))
             }
 
-            // ─── 2. Conversation list OPTIMISTICALLY update karo ───
+            // ─── 2. Conversation list ALWAYS update karo (sender + receiver dono ke liye) ───
             setConversations((prev) => {
                 const existingIndex = prev.findIndex((c) => c._id?.toString() === convIdStr)
 
