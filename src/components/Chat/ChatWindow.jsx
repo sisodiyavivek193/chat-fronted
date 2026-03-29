@@ -9,7 +9,7 @@ import toast from 'react-hot-toast'
 
 export default function ChatWindow() {
     const { user } = useAuth()
-    const { selectedChat, setSelectedChat, messages, setMessages, typingUsers, onlineUsers, setConversations } = useChat()
+    const { selectedChat, setSelectedChat, messages, setMessages, typingUsers, onlineUsers, setConversations, loadConversations } = useChat()
     const [input, setInput] = useState('')
     const [sending, setSending] = useState(false)
     const [showMenu, setShowMenu] = useState(false)
@@ -117,27 +117,6 @@ export default function ChatWindow() {
         }
     }
 
-    const handleReport = async () => {
-        toast.success(`${otherUser?.username} reported`)
-    }
-
-    const handleClearChat = async () => {
-        if (!window.confirm('Clear all messages in this chat?')) return
-        try {
-            // Delete all visible messages locally
-            setMessages([])
-            toast.success('Chat cleared')
-        } catch (err) {
-            toast.error('Failed to clear chat')
-        }
-    }
-
-    const handleDeleteChat = async () => {
-        if (!window.confirm('Delete this chat?')) return
-        setSelectedChat(null)
-        toast.success('Chat deleted')
-    }
-
     const handleKeyDown = (e) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault()
@@ -162,13 +141,78 @@ export default function ChatWindow() {
     }
 
     const handleBlock = async () => {
+        if (!window.confirm(`Block ${otherUser?.username}? They won't be able to message you.`)) return
         try {
             await api.post(`/api/users/block/${otherUser._id}`)
             toast.success(`${otherUser.username} blocked`)
             setShowMenu(false)
+            setSelectedChat(null)
+            loadConversations()
         } catch (err) {
             toast.error(err.response?.data?.error || 'Failed to block')
         }
+    }
+
+    const handleReport = async () => {
+        const reason = window.prompt(`Report ${otherUser?.username}? Enter reason (optional):`)
+        if (reason === null) return // cancelled
+        try {
+            await api.post(`/api/chat/report/${otherUser._id}`, { reason })
+            toast.success('User reported')
+            setShowMenu(false)
+        } catch (err) {
+            toast.error('Failed to report')
+        }
+    }
+
+    const handleClearChat = async () => {
+        if (!window.confirm('Clear this chat? Messages will be removed for you only.')) return
+        try {
+            await api.delete(`/api/chat/clear/${otherUser._id}`)
+            setMessages([])
+            toast.success('Chat cleared')
+            setShowMenu(false)
+            loadConversations()
+        } catch (err) {
+            toast.error(err.response?.data?.error || 'Failed to clear chat')
+        }
+    }
+
+    const handleDeleteChat = async () => {
+        if (!window.confirm('Delete this chat? This cannot be undone.')) return
+        try {
+            await api.delete(`/api/chat/delete/${otherUser._id}`)
+            setMessages([])
+            setSelectedChat(null)
+            toast.success('Chat deleted')
+            setShowMenu(false)
+            loadConversations()
+        } catch (err) {
+            toast.error(err.response?.data?.error || 'Failed to delete chat')
+        }
+    }
+
+    const handleDeleteSelected = async () => {
+        if (!selectedMessages.length) return
+        try {
+            await api.delete('/api/chat/messages/bulk', { data: { messageIds: selectedMessages } })
+            setMessages(prev => prev.map(m =>
+                selectedMessages.includes(m._id)
+                    ? { ...m, isDeleted: true, encryptedContent: 'This message was deleted' }
+                    : m
+            ))
+            setSelectedMessages([])
+            setSelectMode(false)
+            toast.success(`${selectedMessages.length} message(s) deleted`)
+        } catch (err) {
+            toast.error('Failed to delete messages')
+        }
+    }
+
+    const toggleSelectMessage = (msgId) => {
+        setSelectedMessages(prev =>
+            prev.includes(msgId) ? prev.filter(id => id !== msgId) : [...prev, msgId]
+        )
     }
 
     if (!selectedChat) {
@@ -246,33 +290,33 @@ export default function ChatWindow() {
                             >
                                 <button onClick={() => { setSearchMode(true); setShowMenu(false) }}
                                     className="w-full text-left px-4 py-2 text-wa-text text-sm hover:bg-wa-hover">
-                                    🔍 Search Messages
+                                    Search Messages
                                 </button>
                                 <button onClick={() => { setSelectMode(true); setShowMenu(false) }}
                                     className="w-full text-left px-4 py-2 text-wa-text text-sm hover:bg-wa-hover">
-                                    ☑️ Select Messages
+                                    Select Messages
                                 </button>
                                 <button onClick={() => { setSelectedChat(null); setShowMenu(false) }}
                                     className="w-full text-left px-4 py-2 text-wa-text text-sm hover:bg-wa-hover">
-                                    ✖️ Close Chat
+                                    Close Chat
                                 </button>
                                 <div className="border-t border-wa-border my-1" />
-                                <button onClick={() => { handleReport(); setShowMenu(false) }}
+                                <button onClick={() => { handleReport(); }}
                                     className="w-full text-left px-4 py-2 text-wa-text text-sm hover:bg-wa-hover">
-                                    🚩 Report
+                                    Report
                                 </button>
-                                <button onClick={() => { handleBlock(); setShowMenu(false) }}
+                                <button onClick={() => { handleBlock(); }}
                                     className="w-full text-left px-4 py-2 text-red-400 text-sm hover:bg-wa-hover">
-                                    🚫 Block {otherUser?.username}
+                                    Block {otherUser?.username}
                                 </button>
                                 <div className="border-t border-wa-border my-1" />
-                                <button onClick={() => { handleClearChat(); setShowMenu(false) }}
+                                <button onClick={() => { handleClearChat(); }}
                                     className="w-full text-left px-4 py-2 text-red-400 text-sm hover:bg-wa-hover">
-                                    🗑️ Clear Chat
+                                    Clear Chat
                                 </button>
-                                <button onClick={() => { handleDeleteChat(); setShowMenu(false) }}
+                                <button onClick={() => { handleDeleteChat(); }}
                                     className="w-full text-left px-4 py-2 text-red-400 text-sm hover:bg-wa-hover">
-                                    ❌ Delete Chat
+                                    Delete Chat
                                 </button>
                             </div>
                         )}
@@ -280,19 +324,38 @@ export default function ChatWindow() {
                 </div>
             </div>
 
-            {/* Search bar */}
+            {/* Search Bar */}
             {searchMode && (
                 <div className="flex items-center gap-2 px-4 py-2 bg-wa-panel border-b border-wa-border">
-                    <input
-                        autoFocus
-                        type="text"
-                        value={searchQuery}
+                    <svg className="w-4 h-4 text-wa-text_secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                    <input autoFocus type="text" value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Search messages..."
-                        className="flex-1 bg-wa-search text-wa-text text-sm px-3 py-1.5 rounded-full focus:outline-none placeholder-wa-text_secondary"
+                        placeholder="Search in messages..."
+                        className="flex-1 bg-transparent text-wa-text text-sm focus:outline-none placeholder-wa-text_secondary"
                     />
                     <button onClick={() => { setSearchMode(false); setSearchQuery('') }}
-                        className="text-wa-text_secondary text-sm hover:text-wa-text px-2">✕</button>
+                        className="text-wa-text_secondary hover:text-wa-text text-lg px-1">✕</button>
+                </div>
+            )}
+
+            {/* Select Mode Bar */}
+            {selectMode && (
+                <div className="flex items-center justify-between px-4 py-2 bg-wa-panel border-b border-wa-border">
+                    <span className="text-wa-text text-sm">{selectedMessages.length} selected</span>
+                    <div className="flex gap-2">
+                        {selectedMessages.length > 0 && (
+                            <button onClick={handleDeleteSelected}
+                                className="text-red-400 text-sm hover:text-red-300 font-medium">
+                                Delete
+                            </button>
+                        )}
+                        <button onClick={() => { setSelectMode(false); setSelectedMessages([]) }}
+                            className="text-wa-text_secondary text-sm hover:text-wa-text">
+                            Cancel
+                        </button>
+                    </div>
                 </div>
             )}
 
@@ -313,64 +376,77 @@ export default function ChatWindow() {
                     </div>
                 )}
 
-                {messages.filter(msg => !searchMode || !searchQuery || (msg._plainText || '').toLowerCase().includes(searchQuery.toLowerCase()) || (!msg.isDeleted && msg.encryptedContent?.includes(searchQuery))).map((msg, idx) => {
-                    const isMine = msg.sender?._id === user._id || msg.sender === user._id
-                    const plainText = decryptMessage(msg)
-                    const showDateSep = idx === 0 ||
-                        new Date(msg.createdAt).toDateString() !== new Date(messages[idx - 1]?.createdAt).toDateString()
-                    const isRead = msg.readBy?.length > 1
+                {messages
+                    .filter(msg => {
+                        if (!searchMode || !searchQuery) return true
+                        const text = msg._plainText || ''
+                        return text.toLowerCase().includes(searchQuery.toLowerCase())
+                    })
+                    .map((msg, idx) => {
+                        const isMine = msg.sender?._id === user._id || msg.sender === user._id
+                        const plainText = decryptMessage(msg)
+                        const showDateSep = idx === 0 ||
+                            new Date(msg.createdAt).toDateString() !== new Date(messages[idx - 1]?.createdAt).toDateString()
+                        const isRead = msg.readBy?.length > 1
 
-                    return (
-                        <div key={msg._id}>
-                            {showDateSep && (
-                                <div className="flex justify-center py-2">
-                                    <span className="bg-wa-panel text-wa-text_secondary text-[11px] px-3 py-1 rounded-full">
-                                        {format(new Date(msg.createdAt), 'MMMM d, yyyy')}
-                                    </span>
-                                </div>
-                            )}
-                            <div className={`flex ${isMine ? 'justify-end' : 'justify-start'} mb-0.5 animate-fade-in`}>
-                                <div
-                                    onContextMenu={(e) => {
-                                        if (isMine && !msg.isDeleted) {
-                                            e.preventDefault()
-                                            setContextMenu({ x: e.clientX, y: e.clientY, messageId: msg._id })
-                                        }
-                                    }}
-                                    className={`relative max-w-[65%] px-3 py-2 rounded-lg text-sm shadow-sm cursor-pointer
+                        return (
+                            <div key={msg._id}>
+                                {showDateSep && (
+                                    <div className="flex justify-center py-2">
+                                        <span className="bg-wa-panel text-wa-text_secondary text-[11px] px-3 py-1 rounded-full">
+                                            {format(new Date(msg.createdAt), 'MMMM d, yyyy')}
+                                        </span>
+                                    </div>
+                                )}
+                                <div className={`flex ${isMine ? 'justify-end' : 'justify-start'} mb-0.5 animate-fade-in items-center gap-2`}
+                                    onClick={() => selectMode && !msg._id.startsWith('temp_') && toggleSelectMessage(msg._id)}>
+                                    {selectMode && (
+                                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 cursor-pointer
+                                        ${selectedMessages.includes(msg._id) ? 'bg-wa-green border-wa-green' : 'border-wa-text_secondary'}`}>
+                                            {selectedMessages.includes(msg._id) && <span className="text-white text-xs">✓</span>}
+                                        </div>
+                                    )}
+                                    <div
+                                        onContextMenu={(e) => {
+                                            if (isMine && !msg.isDeleted && !selectMode) {
+                                                e.preventDefault()
+                                                setContextMenu({ x: e.clientX, y: e.clientY, messageId: msg._id })
+                                            }
+                                        }}
+                                        className={`relative max-w-[65%] px-3 py-2 rounded-lg text-sm shadow-sm cursor-pointer
                                         ${isMine
-                                            ? 'bg-wa-bubble_out text-wa-text rounded-tr-none bubble-out'
-                                            : 'bg-wa-bubble_in text-wa-text rounded-tl-none bubble-in'
-                                        }
+                                                ? 'bg-wa-bubble_out text-wa-text rounded-tr-none bubble-out'
+                                                : 'bg-wa-bubble_in text-wa-text rounded-tl-none bubble-in'
+                                            }
                                         ${msg.isDeleted ? 'opacity-60 italic' : ''}
                                     `}
-                                >
-                                    {msg.isDeleted ? (
-                                        <span className="flex items-center gap-1 text-wa-text_secondary">
-                                            🚫 This message was deleted
-                                        </span>
-                                    ) : (
-                                        <span className="break-words">{plainText}</span>
-                                    )}
-                                    <div className="flex items-center justify-end gap-1 mt-0.5">
-                                        <span className="text-[10px] text-wa-text_secondary">
-                                            {format(new Date(msg.createdAt), 'h:mm a')}
-                                        </span>
-                                        {isMine && !msg.isDeleted && (
-                                            <svg className={`w-4 h-4 ${isRead ? 'tick-read' : 'tick-single'}`} viewBox="0 0 18 18" fill="currentColor">
-                                                {isRead ? (
-                                                    <path d="M17.394 5.035l-.57-.444a.434.434 0 0 0-.609.076L8.094 13.492 5.817 11.215a.434.434 0 0 0-.614 0l-.483.483a.434.434 0 0 0 0 .614l3.037 3.037a.433.433 0 0 0 .645-.031l8.943-9.65a.434.434 0 0 0-.051-.633z M3.017 9.017L.947 6.947a.434.434 0 0 0-.614 0l-.483.483a.434.434 0 0 0 0 .614l2.39 2.39 .777-.777z" />
-                                                ) : (
-                                                    <path d="M15.01 3.316l-.478-.372a.365.365 0 0 0-.51.063L8.666 9.879a.32.32 0 0 1-.484.033l-.358-.325a.319.319 0 0 0-.484.033l-.359.34a.32.32 0 0 0 .033.484l1.868 1.686a.32.32 0 0 0 .484-.033l5.895-8.252a.366.366 0 0 0-.065-.51z" />
-                                                )}
-                                            </svg>
+                                    >
+                                        {msg.isDeleted ? (
+                                            <span className="flex items-center gap-1 text-wa-text_secondary">
+                                                🚫 This message was deleted
+                                            </span>
+                                        ) : (
+                                            <span className="break-words">{plainText}</span>
                                         )}
+                                        <div className="flex items-center justify-end gap-1 mt-0.5">
+                                            <span className="text-[10px] text-wa-text_secondary">
+                                                {format(new Date(msg.createdAt), 'h:mm a')}
+                                            </span>
+                                            {isMine && !msg.isDeleted && (
+                                                <svg className={`w-4 h-4 ${isRead ? 'tick-read' : 'tick-single'}`} viewBox="0 0 18 18" fill="currentColor">
+                                                    {isRead ? (
+                                                        <path d="M17.394 5.035l-.57-.444a.434.434 0 0 0-.609.076L8.094 13.492 5.817 11.215a.434.434 0 0 0-.614 0l-.483.483a.434.434 0 0 0 0 .614l3.037 3.037a.433.433 0 0 0 .645-.031l8.943-9.65a.434.434 0 0 0-.051-.633z M3.017 9.017L.947 6.947a.434.434 0 0 0-.614 0l-.483.483a.434.434 0 0 0 0 .614l2.39 2.39 .777-.777z" />
+                                                    ) : (
+                                                        <path d="M15.01 3.316l-.478-.372a.365.365 0 0 0-.51.063L8.666 9.879a.32.32 0 0 1-.484.033l-.358-.325a.319.319 0 0 0-.484.033l-.359.34a.32.32 0 0 0 .033.484l1.868 1.686a.32.32 0 0 0 .484-.033l5.895-8.252a.366.366 0 0 0-.065-.51z" />
+                                                    )}
+                                                </svg>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    )
-                })}
+                        )
+                    })}
 
                 {/* Typing indicator */}
                 {isTyping && (
