@@ -9,9 +9,10 @@ import toast from 'react-hot-toast'
 
 export default function ChatWindow() {
     const { user } = useAuth()
-    const { selectedChat, messages, setMessages, typingUsers, onlineUsers, setConversations } = useChat()
+    const { selectedChat, messages, setMessages, typingUsers, onlineUsers, setConversations, setSending } = useChat()
     const [input, setInput] = useState('')
-    const [sending, setSending] = useState(false)
+    const [sending, _setSending] = useState(false)
+    const setSendingState = (v) => { _setSending(v); setSending?.(v) }
     const [showMenu, setShowMenu] = useState(false)
     const [contextMenu, setContextMenu] = useState(null)
     const bottomRef = useRef(null)
@@ -60,7 +61,7 @@ export default function ChatWindow() {
         if (!input.trim() || !selectedChat || sending) return
         const text = input.trim()
         setInput('')
-        setSending(true)
+        setSendingState(true)
 
         const encrypted = encrypt(text, user._id, otherUser._id)
 
@@ -109,7 +110,7 @@ export default function ChatWindow() {
             setMessages((prev) => prev.filter((m) => m._id !== tempMsg._id))
             toast.error(err.response?.data?.error || 'Failed to send')
         } finally {
-            setSending(false)
+            setSendingState(false)
         }
     }
 

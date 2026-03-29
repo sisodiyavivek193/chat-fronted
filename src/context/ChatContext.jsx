@@ -18,6 +18,8 @@ export const ChatProvider = ({ children }) => {
 
     const selectedChatRef = useRef(null)
     const conversationsRef = useRef([])
+    // ✅ Sending ke waqt polling rok do — duplicate messages se bachao
+    const isSendingRef = useRef(false)
 
     useEffect(() => { selectedChatRef.current = selectedChat }, [selectedChat])
     useEffect(() => { conversationsRef.current = conversations }, [conversations])
@@ -41,18 +43,43 @@ export const ChatProvider = ({ children }) => {
         } catch { }
     }, [])
 
+    // ✅ Messages load karo — deduplication ke saath
+    const loadMessages = useCallback(async (otherUserId) => {
+        if (!otherUserId || isSendingRef.current) return
+        try {
+            const res = await api.get(`/api/chat/messages/${otherUserId}`)
+            setMessages(res.data.messages)
+        } catch { }
+    }, [])
+
     useEffect(() => {
         if (!user) return
         loadConversations()
         loadNotifications()
     }, [user])
 
-    // ✅ Polling — har 3 second mein chatlist refresh
+    // ✅ Chatlist polling — har 3 sec
     useEffect(() => {
         if (!user) return
         const interval = setInterval(() => { loadConversations() }, 3000)
         return () => clearInterval(interval)
     }, [user, loadConversations])
+
+    // ✅ Messages polling — har 2 sec SIRF jab chat open ho
+    useEffect(() => {
+        if (!user || !selectedChat?.user?._id) return
+        const otherUserId = selectedChat.user._id
+
+        // Pehle turant load karo
+        loadMessages(otherUserId)
+
+        // Phir har 2 sec pe
+        const interval = setInterval(() => {
+            loadMessages(otherUserId)
+        }, 2000)
+
+        return () => clearInterval(interval)
+    }, [user, selectedChat?.user?._id, loadMessages])
 
     useEffect(() => {
         if (!user || !token) return
@@ -67,22 +94,20 @@ export const ChatProvider = ({ children }) => {
             const convIdStr = conversationId?.toString()
             const isCurrentChat = current?.conversationId?.toString() === convIdStr
 
-            // ✅ Messages window update — receiver ke liye
             if (isCurrentChat) {
+                // Socket se instant update — polling ka wait mat karo
                 setMessages((prev) => {
                     if (prev.find((m) => m._id === message._id)) return prev
                     const withoutTemp = prev.filter((m) => !m._id?.startsWith('temp_'))
                     return [...withoutTemp, message]
                 })
             } else {
-                // ✅ Unread count — sirf tab jab chat open nahi
                 setUnreadCounts((prev) => ({
                     ...prev,
                     [convIdStr]: (prev[convIdStr] || 0) + 1,
                 }))
             }
 
-            // ✅ Chatlist bhi immediately update karo
             loadConversations()
         }
 
@@ -155,6 +180,9 @@ export const ChatProvider = ({ children }) => {
         } catch { setMessages([]) }
     }
 
+    // ✅ isSendingRef expose karo ChatWindow ke liye
+    const setSending = (val) => { isSendingRef.current = val }
+
     const getLastMessagePreview = useCallback((conv) => {
         if (!conv.lastMessage) return 'Say hello! 👋'
         if (conv.lastMessage.isDeleted) return '🚫 This message was deleted'
@@ -181,6 +209,7 @@ export const ChatProvider = ({ children }) => {
             typingUsers, onlineUsers,
             unreadCounts,
             getLastMessagePreview,
+            setSending,
         }}>
             {children}
         </ChatContext.Provider>
