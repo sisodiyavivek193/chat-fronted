@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { useChat } from '../../context/ChatContext'
-import { formatDistanceToNow } from 'date-fns'
+import { format, isToday, isYesterday } from 'date-fns'
 import UserSearch from '../Friends/UserSearch'
 import FriendRequests from '../Friends/FriendRequests'
 
@@ -108,17 +108,20 @@ export default function ChatList() {
                                 <p className="text-xs mt-1">Search users to start chatting</p>
                             </div>
                         ) : (
-                            conversations.map((conv) => (
-                                <ConversationItem
-                                    key={conv._id}
-                                    conv={conv}
-                                    isSelected={selectedChat?.user?._id === conv.otherUser?._id}
-                                    isOnline={onlineUsers.has(conv.otherUser?._id)}
-                                    unread={unreadCounts[conv._id] || 0}
-                                    preview={getLastMessagePreview(conv)}
-                                    onClick={() => selectChat(conv.otherUser, conv._id)}
-                                />
-                            ))
+                            // Latest message wali conversation top pe
+                            [...conversations]
+                                .sort((a, b) => new Date(b.lastMessageAt) - new Date(a.lastMessageAt))
+                                .map((conv) => (
+                                    <ConversationItem
+                                        key={conv._id}
+                                        conv={conv}
+                                        isSelected={selectedChat?.user?._id === conv.otherUser?._id}
+                                        isOnline={onlineUsers.has(conv.otherUser?._id)}
+                                        unread={unreadCounts[conv._id] || 0}
+                                        preview={getLastMessagePreview(conv)}
+                                        onClick={() => selectChat(conv.otherUser, conv._id)}
+                                    />
+                                ))
                         )}
                     </div>
                 </>
@@ -131,9 +134,14 @@ export default function ChatList() {
 }
 
 function ConversationItem({ conv, isSelected, isOnline, unread, preview, onClick }) {
-    const lastMsgTime = conv.lastMessageAt
-        ? formatDistanceToNow(new Date(conv.lastMessageAt), { addSuffix: false })
-        : ''
+    const getTime = (dateStr) => {
+        if (!dateStr) return ''
+        const date = new Date(dateStr)
+        if (isToday(date)) return format(date, 'h:mm a')
+        if (isYesterday(date)) return 'Yesterday'
+        return format(date, 'dd/MM/yy')
+    }
+    const lastMsgTime = getTime(conv.lastMessageAt)
 
     return (
         <div

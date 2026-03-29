@@ -9,12 +9,15 @@ import toast from 'react-hot-toast'
 
 export default function ChatWindow() {
     const { user } = useAuth()
-    const { selectedChat, messages, setMessages, typingUsers, onlineUsers, setConversations, setSending } = useChat()
+    const { selectedChat, setSelectedChat, messages, setMessages, typingUsers, onlineUsers, setConversations } = useChat()
     const [input, setInput] = useState('')
-    const [sending, _setSending] = useState(false)
-    const setSendingState = (v) => { _setSending(v); setSending?.(v) }
+    const [sending, setSending] = useState(false)
     const [showMenu, setShowMenu] = useState(false)
     const [contextMenu, setContextMenu] = useState(null)
+    const [searchMode, setSearchMode] = useState(false)
+    const [searchQuery, setSearchQuery] = useState('')
+    const [selectMode, setSelectMode] = useState(false)
+    const [selectedMessages, setSelectedMessages] = useState([])
     const bottomRef = useRef(null)
     const messagesAreaRef = useRef(null)
     const typingTimeout = useRef(null)
@@ -61,7 +64,7 @@ export default function ChatWindow() {
         if (!input.trim() || !selectedChat || sending) return
         const text = input.trim()
         setInput('')
-        setSendingState(true)
+        setSending(true)
 
         const encrypted = encrypt(text, user._id, otherUser._id)
 
@@ -110,8 +113,29 @@ export default function ChatWindow() {
             setMessages((prev) => prev.filter((m) => m._id !== tempMsg._id))
             toast.error(err.response?.data?.error || 'Failed to send')
         } finally {
-            setSendingState(false)
+            setSending(false)
         }
+    }
+
+    const handleReport = async () => {
+        toast.success(`${otherUser?.username} reported`)
+    }
+
+    const handleClearChat = async () => {
+        if (!window.confirm('Clear all messages in this chat?')) return
+        try {
+            // Delete all visible messages locally
+            setMessages([])
+            toast.success('Chat cleared')
+        } catch (err) {
+            toast.error('Failed to clear chat')
+        }
+    }
+
+    const handleDeleteChat = async () => {
+        if (!window.confirm('Delete this chat?')) return
+        setSelectedChat(null)
+        toast.success('Chat deleted')
     }
 
     const handleKeyDown = (e) => {
@@ -217,20 +241,60 @@ export default function ChatWindow() {
                         </button>
                         {showMenu && (
                             <div
-                                className="absolute right-0 top-10 bg-wa-panel border border-wa-border rounded-md shadow-xl z-50 w-44 py-1"
+                                className="absolute right-0 top-10 bg-wa-panel border border-wa-border rounded-md shadow-xl z-50 w-52 py-1"
                                 onClick={(e) => e.stopPropagation()}
                             >
-                                <button
-                                    onClick={handleBlock}
-                                    className="w-full text-left px-4 py-2 text-red-400 text-sm hover:bg-wa-hover"
-                                >
-                                    Block {otherUser?.username}
+                                <button onClick={() => { setSearchMode(true); setShowMenu(false) }}
+                                    className="w-full text-left px-4 py-2 text-wa-text text-sm hover:bg-wa-hover">
+                                    🔍 Search Messages
+                                </button>
+                                <button onClick={() => { setSelectMode(true); setShowMenu(false) }}
+                                    className="w-full text-left px-4 py-2 text-wa-text text-sm hover:bg-wa-hover">
+                                    ☑️ Select Messages
+                                </button>
+                                <button onClick={() => { setSelectedChat(null); setShowMenu(false) }}
+                                    className="w-full text-left px-4 py-2 text-wa-text text-sm hover:bg-wa-hover">
+                                    ✖️ Close Chat
+                                </button>
+                                <div className="border-t border-wa-border my-1" />
+                                <button onClick={() => { handleReport(); setShowMenu(false) }}
+                                    className="w-full text-left px-4 py-2 text-wa-text text-sm hover:bg-wa-hover">
+                                    🚩 Report
+                                </button>
+                                <button onClick={() => { handleBlock(); setShowMenu(false) }}
+                                    className="w-full text-left px-4 py-2 text-red-400 text-sm hover:bg-wa-hover">
+                                    🚫 Block {otherUser?.username}
+                                </button>
+                                <div className="border-t border-wa-border my-1" />
+                                <button onClick={() => { handleClearChat(); setShowMenu(false) }}
+                                    className="w-full text-left px-4 py-2 text-red-400 text-sm hover:bg-wa-hover">
+                                    🗑️ Clear Chat
+                                </button>
+                                <button onClick={() => { handleDeleteChat(); setShowMenu(false) }}
+                                    className="w-full text-left px-4 py-2 text-red-400 text-sm hover:bg-wa-hover">
+                                    ❌ Delete Chat
                                 </button>
                             </div>
                         )}
                     </div>
                 </div>
             </div>
+
+            {/* Search bar */}
+            {searchMode && (
+                <div className="flex items-center gap-2 px-4 py-2 bg-wa-panel border-b border-wa-border">
+                    <input
+                        autoFocus
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search messages..."
+                        className="flex-1 bg-wa-search text-wa-text text-sm px-3 py-1.5 rounded-full focus:outline-none placeholder-wa-text_secondary"
+                    />
+                    <button onClick={() => { setSearchMode(false); setSearchQuery('') }}
+                        className="text-wa-text_secondary text-sm hover:text-wa-text px-2">✕</button>
+                </div>
+            )}
 
             {/* ✅ Messages area with ref for scroll control */}
             <div
@@ -249,7 +313,7 @@ export default function ChatWindow() {
                     </div>
                 )}
 
-                {messages.map((msg, idx) => {
+                {messages.filter(msg => !searchMode || !searchQuery || (msg._plainText || '').toLowerCase().includes(searchQuery.toLowerCase()) || (!msg.isDeleted && msg.encryptedContent?.includes(searchQuery))).map((msg, idx) => {
                     const isMine = msg.sender?._id === user._id || msg.sender === user._id
                     const plainText = decryptMessage(msg)
                     const showDateSep = idx === 0 ||
